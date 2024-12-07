@@ -1,57 +1,32 @@
 #!/bin/bash
-# Met à jour pip
+
+# Création et activation de l'environnement virtuel
+python3 -m venv venv
+source venv/bin/activate
+
+# Installation des dépendances de base
 pip install --upgrade pip
+pip install torch torchvision torchaudio
+pip install transformers==4.37.2
+pip install peft==0.7.1
+pip install trl==0.7.4
+pip install pandas==2.1.4
+pip install accelerate==0.25.0
+pip install bitsandbytes==0.41.3
+pip install scipy==1.11.4
+pip install safetensors==0.4.1
 
-# Installe les dépendances nécessaires
-pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
-pip install --no-deps \
-    "tokenizers>=0.14,<0.19" \
-    "transformers==4.36.2" \
-    "xformers<0.0.26" \
-    "trl==0.7.10" \
-    "peft==0.7.1" \
-    "accelerate==0.21.0" \
-    "bitsandbytes==0.40.0" \
-    "pandas>=2.2.3" \
-    "scikit-learn" \
-    "scipy" \
-    "joblib"
-    
-# Execute the Python script
-python training_ollama.py#!/bin/bash
+# Installation d'unsloth
+pip install unsloth[cu118] -U --user
 
-# Configuration des couleurs pour les logs
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-echo -e "${GREEN}🚀 Démarrage de la configuration de l'environnement...${NC}"
-
-# Installation d'Ollama si nécessaire
-if ! command -v ollama &> /dev/null; then
-    echo -e "${YELLOW}Installation d'Ollama...${NC}"
-    curl -fsSL https://ollama.ai/install.sh | sh
+# Installation d'Ollama (si nécessaire)
+if ! command -v ollama &> /dev/null
+then
+    curl -fsSL https://ollama.com/install.sh | sh
 fi
 
-# Création des répertoires nécessaires
-echo -e "${YELLOW}Création des répertoires...${NC}"
-mkdir -p outputs
-mkdir -p ollama_export
-mkdir -p model_logs
+# Création du dossier de sortie si nécessaire
+mkdir -p output
 
-# Démarrage d'Ollama en arrière-plan
-echo -e "${YELLOW}Démarrage du serveur Ollama...${NC}"
-ollama serve &
-
-# Attente que le serveur Ollama soit prêt
-sleep 5
-
-echo -e "${GREEN}✨ Configuration terminée ! Démarrage de l'entraînement...${NC}"
-
-# Lancement de l'entraînement
-python training_ollama.py
-
-# Nettoyage
-trap 'pkill -f "ollama serve"' EXIT
-
-echo -e "${GREEN}🎉 Processus terminé !${NC}"
+echo "Installation terminée. Vous pouvez maintenant lancer l'entraînement avec:"
+echo "python training_ollama.py"
