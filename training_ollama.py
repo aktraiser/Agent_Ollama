@@ -138,7 +138,7 @@ def train_model(model, tokenizer, dataset, max_seq_length):
     
     return trainer.train()
 
-def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export"):
+def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", push_to_hub=False, repo_id=None):
     """Export le modèle pour Ollama selon la documentation"""
     logger.info("Exporting model for Ollama...")
     
@@ -150,12 +150,25 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export"):
     logger.info("Converting to GGUF format...")
     os.makedirs(output_dir, exist_ok=True)
     
-    # Utilisation de q4_k_m pour un bon compromis taille/qualité
-    model.push_to_hub_gguf(
-        repo_id=output_dir,
-        tokenizer=tokenizer,
-        quantization_method="q4_k_m"
-    )
+    try:
+        if push_to_hub and repo_id:
+            logger.info(f"Pushing model to Hugging Face Hub: {repo_id}")
+            # Utilisation de q4_k_m pour un bon compromis taille/qualité
+            model.push_to_hub_gguf(
+                repo_id=repo_id,
+                tokenizer=tokenizer,
+                quantization_method="q4_k_m"
+            )
+        else:
+            logger.info("Saving model locally only")
+            # Save locally using llama.cpp conversion
+            model.save_gguf_model(
+                output_path=os.path.join(output_dir, "unsloth.Q4_K_M.gguf"),
+                quantization_method="q4_k_m"
+            )
+    except Exception as e:
+        logger.error(f"Error during model export: {str(e)}")
+        logger.info("Continuing with local model only")
     
     # Création du Modelfile
     modelfile_content = f'''FROM {os.path.abspath(output_dir)}
@@ -208,8 +221,13 @@ if __name__ == "__main__":
         logger.info("Preparing model for inference...")
         model = FastLanguageModel.for_inference(model)
         
-        # Export pour Ollama
-        ollama_dir = save_model_for_ollama(model, tokenizer)
+        # Export pour Ollama (local only by default)
+        ollama_dir = save_model_for_ollama(
+            model, 
+            tokenizer,
+            output_dir="./ollama_export",
+            push_to_hub=False  # Set to True and provide repo_id to upload to HF Hub
+        )
         
         if setup_ollama():
             logger.info("Creating Ollama model...")
