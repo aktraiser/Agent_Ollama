@@ -22,7 +22,7 @@ def initialize_model(max_seq_length=2048):
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name="unsloth/Meta-Llama-3.1-8B",
         max_seq_length=max_seq_length,
-        dtype=None,  # Auto-détection
+        dtype=None,  # Auto-detection
         load_in_4bit=True,  # Recommandé pour les GPU avec mémoire limitée
         attn_implementation="flash_attention_2",
         trust_remote_code=True
@@ -153,16 +153,20 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", push_t
     try:
         if push_to_hub and repo_id:
             logger.info(f"Pushing model to Hugging Face Hub: {repo_id}")
-            model.push_to_hub_gguf(
+            # Use FastLanguageModel's GGUF conversion for Hub
+            FastLanguageModel.push_to_hub_gguf(
+                model=model,
                 repo_id=repo_id,
                 tokenizer=tokenizer,
-                quantization_method="q4_k_m"
+                quantization="q4_k_m"
             )
         else:
             logger.info("Saving model locally")
-            # Use Unsloth's convert_to_gguf method for local saving
-            model.convert_to_gguf(
-                output_path=os.path.join(output_dir, "unsloth.Q4_K_M.gguf"),
+            # Use FastLanguageModel's GGUF conversion for local save
+            output_path = os.path.join(output_dir, "unsloth.Q4_K_M.gguf")
+            FastLanguageModel.save_pretrained_gguf(
+                model=model,
+                save_directory=output_dir,
                 quantization="q4_k_m"
             )
     except Exception as e:
@@ -170,27 +174,18 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", push_t
         logger.info("Continuing with local model only")
     
     # Création du Modelfile
-    modelfile_content = f'''FROM {os.path.abspath(output_dir)}
-
-# Paramètres de génération
+    modelfile_content = f'''FROM {os.path.join(output_dir, "unsloth.Q4_K_M.gguf")}
+PARAMETER stop "Human:"
+PARAMETER stop "Assistant:"
 PARAMETER temperature 0.7
-PARAMETER top_p 0.9
-PARAMETER stop "### Response:"
-
-# Template de chat personnalisé
-TEMPLATE """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
-
-### Instruction:
-{{.Input}}
-
-### Response:
-"""'''
-
-    modelfile_path = os.path.join(output_dir, "Modelfile")
-    with open(modelfile_path, "w") as f:
+PARAMETER top_k 40
+PARAMETER top_p 0.5
+PARAMETER repeat_penalty 1.1
+PARAMETER num_ctx 2048'''
+    
+    with open(os.path.join(output_dir, "Modelfile"), "w") as f:
         f.write(modelfile_content)
     
-    logger.info(f"Model exported to {output_dir}")
     return output_dir
 
 def setup_ollama():
