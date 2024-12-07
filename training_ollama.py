@@ -49,10 +49,16 @@ def initialize_dataset(tokenizer, csv_file):
     """Prépare le dataset avec le format de prompt standardisé"""
     logger.info(f"Loading dataset from {csv_file}")
     
-    df = pd.read_csv(csv_file, sep=',')
-    
-    # Format de prompt Alpaca amélioré
-    prompt_template = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
+    try:
+        df = pd.read_csv(csv_file, sep=',')
+        
+        required_columns = ['content_type', 'title', 'questions', 'main_text', 'source', 'answers']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}")
+        
+        # Format de prompt Alpaca amélioré
+        prompt_template = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
 
 ### Instruction:
 Tu es un expert comptable spécialisé dans le conseil aux entreprises. Réponds à la question suivante concernant {content_type}: {title}
@@ -68,24 +74,38 @@ Source: {source}
 ### Response:
 {response}"""
 
-    def format_prompt(row):
-        return {
-            "text": prompt_template.format(
-                content_type=row['content_type'],
-                title=row['title'],
-                question=row['questions'],
-                context=row['main_text'],
-                source=row['source'],
-                response=row['answers']
-            )
-        }
-    
-    dataset = Dataset.from_pandas(df).map(
-        format_prompt,
-        remove_columns=df.columns
-    )
-    
-    return dataset
+        def format_prompt(row):
+            try:
+                return {
+                    "text": prompt_template.format(
+                        content_type=str(row['content_type']),
+                        title=str(row['title']),
+                        question=str(row['questions']),
+                        context=str(row['main_text']),
+                        source=str(row['source']),
+                        response=str(row['answers'])
+                    )
+                }
+            except Exception as e:
+                logger.error(f"Error formatting prompt for row: {e}")
+                return {"text": ""}
+
+        # Convert DataFrame to Dataset and apply formatting
+        dataset = Dataset.from_pandas(df)
+        dataset = dataset.map(
+            format_prompt,
+            remove_columns=dataset.column_names,
+            desc="Formatting prompts"
+        )
+
+        if len(dataset) == 0:
+            raise ValueError("Dataset is empty after processing")
+
+        return dataset
+
+    except Exception as e:
+        logger.error(f"Error initializing dataset: {e}")
+        raise
 
 def train_model(model, tokenizer, dataset, max_seq_length):
     """Configure l'entraînement selon les recommandations"""
