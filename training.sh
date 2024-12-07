@@ -3,6 +3,7 @@
 pip install --upgrade pip
 
 # Installation des dépendances avec des versions spécifiques
+pip install triton
 pip install transformers==4.36.2
 pip install trl==0.7.4
 pip install peft==0.7.1
