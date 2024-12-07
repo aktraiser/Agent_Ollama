@@ -153,18 +153,17 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", push_t
     try:
         if push_to_hub and repo_id:
             logger.info(f"Pushing model to Hugging Face Hub: {repo_id}")
-            # Utilisation de q4_k_m pour un bon compromis taille/qualité
             model.push_to_hub_gguf(
                 repo_id=repo_id,
                 tokenizer=tokenizer,
                 quantization_method="q4_k_m"
             )
         else:
-            logger.info("Saving model locally only")
-            # Save locally using llama.cpp conversion
-            model.save_gguf_model(
+            logger.info("Saving model locally")
+            # Use Unsloth's convert_to_gguf method for local saving
+            model.convert_to_gguf(
                 output_path=os.path.join(output_dir, "unsloth.Q4_K_M.gguf"),
-                quantization_method="q4_k_m"
+                quantization="q4_k_m"
             )
     except Exception as e:
         logger.error(f"Error during model export: {str(e)}")
@@ -196,7 +195,24 @@ TEMPLATE """Below is an instruction that describes a task, paired with an input 
 
 def setup_ollama():
     """Configure Ollama"""
+    def is_ollama_installed():
+        try:
+            subprocess.run(['which', 'ollama'], 
+                         stdout=subprocess.PIPE, 
+                         stderr=subprocess.PIPE,
+                         check=True)
+            return True
+        except subprocess.CalledProcessError:
+            return False
+
     try:
+        if not is_ollama_installed():
+            logger.info("Ollama not found. Installing Ollama...")
+            install_cmd = 'curl https://ollama.ai/install.sh | sh'
+            subprocess.run(install_cmd, shell=True, check=True)
+            logger.info("Ollama installed successfully")
+
+        logger.info("Starting Ollama service...")
         subprocess.run(['ollama', 'serve'], 
                       stdout=subprocess.PIPE, 
                       stderr=subprocess.PIPE,
@@ -204,7 +220,7 @@ def setup_ollama():
         time.sleep(5)  # Attendre le démarrage
         return True
     except Exception as e:
-        logger.error(f"Error starting Ollama: {e}")
+        logger.error(f"Error with Ollama setup: {e}")
         return False
 
 if __name__ == "__main__":
