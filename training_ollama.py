@@ -16,6 +16,9 @@ def initialize_model(max_seq_length=2048):
     """Initialise le modèle selon les recommandations Unsloth"""
     logger.info("Loading model...")
     
+    # Configuration recommandée par Unsloth
+    dtype = None  # Auto-détection du dtype
+    
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name="unsloth/Meta-Llama-3.1-8B",
         max_seq_length=max_seq_length,
