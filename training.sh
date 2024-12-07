@@ -4,8 +4,19 @@ pip install --upgrade pip
 
 # Installe les dépendances nécessaires
 pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
-pip install --no-deps "xformers<0.0.26" "trl<0.9.0" "unsloth==2024.12.4" "transformers==4.36.2" "peft==0.7.1" "trl==0.7.10" "accelerate==0.21.0" "bitsandbytes==0.40.0" "pandas>=2.2.3" "scikit-learn" "scipy" "joblib"
-
+pip install --no-deps \
+    "tokenizers>=0.14,<0.19" \
+    "transformers==4.36.2" \
+    "xformers<0.0.26" \
+    "trl==0.7.10" \
+    "peft==0.7.1" \
+    "accelerate==0.21.0" \
+    "bitsandbytes==0.40.0" \
+    "pandas>=2.2.3" \
+    "scikit-learn" \
+    "scipy" \
+    "joblib"
+    
 # Execute the Python script
 python training_ollama.py#!/bin/bash
 
