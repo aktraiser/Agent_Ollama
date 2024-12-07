@@ -3,6 +3,10 @@
 # Met à jour pip
 pip install --upgrade pip
 
+# Installation de torch et triton d'abord
+pip install torch==2.0.1
+pip install triton==2.0.0
+
 # Installation des dépendances de base d'abord
 pip install torch==2.0.1
 pip install transformers==4.36.2
