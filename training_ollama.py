@@ -52,10 +52,15 @@ def initialize_dataset(tokenizer, csv_file):
     prompt_template = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
 
 ### Instruction:
-Tu es un expert comptable spécialisé dans le conseil aux entreprises. Tu dois fournir une réponse professionnelle et précise.
+Tu es un expert comptable spécialisé dans le conseil aux entreprises. Réponds à la question suivante concernant {content_type}: {title}
 
 ### Input:
-{instruction}
+{question}
+
+Contexte:
+{context}
+
+Source: {source}
 
 ### Response:
 {response}"""
@@ -63,7 +68,11 @@ Tu es un expert comptable spécialisé dans le conseil aux entreprises. Tu dois 
     def format_prompt(row):
         return {
             "text": prompt_template.format(
-                instruction=f"{row['questions']}\\nContexte: {row['main_text']}",
+                content_type=row['content_type'],
+                title=row['title'],
+                question=row['questions'],
+                context=row['main_text'],
+                source=row['source'],
                 response=row['answers']
             )
         }
