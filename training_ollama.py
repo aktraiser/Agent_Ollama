@@ -154,8 +154,7 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export"):
     model.push_to_hub_gguf(
         repo_id=output_dir,
         tokenizer=tokenizer,
-        quantization_method="q4_k_m",
-        save_method="safetensors"
+        quantization_method="q4_k_m"
     )
     
     # Création du Modelfile
@@ -167,25 +166,19 @@ PARAMETER top_p 0.9
 PARAMETER stop "### Response:"
 
 # Template de chat personnalisé
-TEMPLATE """{{{{.System}}}}
+TEMPLATE """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
 
 ### Instruction:
-{{{{.Prompt}}}}
-
-### Input:
-{{{{.Input}}}}
+{{.Input}}
 
 ### Response:
-{{{{.Response}}}}"""
+"""'''
 
-# System prompt par défaut
-SYSTEM """Tu es un expert comptable spécialisé dans le conseil aux entreprises. Tu dois fournir une réponse professionnelle et précise."""'''
-    
     modelfile_path = os.path.join(output_dir, "Modelfile")
     with open(modelfile_path, "w") as f:
         f.write(modelfile_content)
     
-    logger.info(f"Modelfile created at: {modelfile_path}")
+    logger.info(f"Model exported to {output_dir}")
     return output_dir
 
 def setup_ollama():
