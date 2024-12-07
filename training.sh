@@ -16,40 +16,11 @@ NC='\033[0m'
 
 echo -e "${GREEN}🚀 Démarrage de la configuration de l'environnement...${NC}"
 
-# Création de l'environnement virtuel si nécessaire
-if [ ! -d "venv" ]; then
-    echo -e "${YELLOW}Création de l'environnement virtuel...${NC}"
-    python3 -m venv venv
-fi
-
-# Activation de l'environnement virtuel
-source venv/bin/activate
-
-# Installation des dépendances
-echo -e "${YELLOW}Installation des dépendances...${NC}"
-pip install --upgrade pip
-pip install unsloth==2024.12.4
-pip install transformers==4.46.3
-pip install peft==0.14.0
-pip install "trl<0.9.0"
-pip install accelerate==1.2.0
-pip install bitsandbytes==0.45.0
-pip install "xformers<0.0.26"
-pip install pandas>=2.2.3
-pip install scikit-learn
-pip install scipy
-
 # Installation d'Ollama si nécessaire
 if ! command -v ollama &> /dev/null; then
     echo -e "${YELLOW}Installation d'Ollama...${NC}"
     curl -fsSL https://ollama.ai/install.sh | sh
 fi
-
-# Création des répertoires nécessaires
-echo -e "${YELLOW}Création des répertoires...${NC}"
-mkdir -p outputs
-mkdir -p ollama_export
-mkdir -p model_logs
 
 # Démarrage d'Ollama en arrière-plan
 echo -e "${YELLOW}Démarrage du serveur Ollama...${NC}"
