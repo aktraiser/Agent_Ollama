@@ -19,7 +19,7 @@ pip install triton==2.0.0
 pip install torch==2.0.1
 pip install transformers==4.36.2
 pip install accelerate==0.21.0
-pip install bitsandbytes==0.40.0
+pip install bitsandbytes==4.46.1
 pip install pandas>=2.2.3
 pip install scikit-learn
 pip install scipy
