@@ -142,27 +142,63 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", push_t
     """Export le modèle pour Ollama selon la documentation"""
     logger.info("Exporting model for Ollama...")
     
-    # Créer le dossier d'export
+    # Créer le dossier d'export avec chemin absolu
+    output_dir = os.path.abspath(output_dir)
     os.makedirs(output_dir, exist_ok=True)
+    logger.info(f"Created output directory at: {output_dir}")
     
     # Sauvegarder le modèle et le tokenizer
-    logger.info("Saving model and tokenizer...")
-    model.save_pretrained(os.path.join(output_dir, "model"))
-    tokenizer.save_pretrained(os.path.join(output_dir, "model"))
+    model_dir = os.path.join(output_dir, "model")
+    os.makedirs(model_dir, exist_ok=True)
+    logger.info(f"Saving model and tokenizer to: {model_dir}")
+    
+    try:
+        # Sauvegarder d'abord en format HF
+        logger.info("Saving model in HF format...")
+        model.save_pretrained(model_dir, safe_serialization=False)  # Désactiver safe_serialization pour éviter safetensors
+        tokenizer.save_pretrained(model_dir)
+        
+        # Convertir en GGUF avec llama.cpp
+        logger.info("Converting to GGUF format...")
+        gguf_path = os.path.join(model_dir, "ggml-model-f16.gguf")
+        
+        # Utiliser convert.py de llama.cpp
+        convert_cmd = [
+            "python3",
+            "-m", "llama_cpp.convert",
+            "--outfile", gguf_path,
+            "--outtype", "f16",
+            model_dir
+        ]
+        
+        subprocess.run(convert_cmd, check=True)
+        logger.info(f"Model converted to GGUF: {gguf_path}")
+        
+        # Nettoyer les fichiers HF temporaires
+        for f in os.listdir(model_dir):
+            if f != "ggml-model-f16.gguf":
+                os.remove(os.path.join(model_dir, f))
+        
+        logger.info("Cleaned up temporary files")
+        
+    except Exception as e:
+        logger.error(f"Error saving model: {str(e)}")
+        raise
     
     # Création du Modelfile avec le chemin relatif
-    modelfile_content = '''FROM ./model
-PARAMETER stop "Human:"
-PARAMETER stop "Assistant:"
+    modelfile_content = '''FROM ./model/ggml-model-f16.gguf
+TEMPLATE """{{ .Prompt }}"""
+SYSTEM """Tu es un expert comptable français spécialisé dans le conseil aux entreprises. Réponds de manière précise et professionnelle."""
 PARAMETER temperature 0.7
-PARAMETER top_k 40
 PARAMETER top_p 0.5
 PARAMETER repeat_penalty 1.1
-PARAMETER num_ctx 2048'''
+PARAMETER num_ctx 2048
+PARAMETER num_gpu_layers 0'''
     
     modelfile_path = os.path.join(output_dir, "Modelfile")
     with open(modelfile_path, "w") as f:
         f.write(modelfile_content)
+    logger.info(f"Created Modelfile at: {modelfile_path}")
     
     # Créer un README avec les instructions
     readme_content = """# Modèle Comptable Expert
@@ -183,17 +219,25 @@ Ce modèle a été entraîné pour répondre à des questions comptables.
    ```
 """
     
-    with open(os.path.join(output_dir, "README.md"), "w") as f:
+    readme_path = os.path.join(output_dir, "README.md")
+    with open(readme_path, "w") as f:
         f.write(readme_content)
+    logger.info(f"Created README at: {readme_path}")
+    
+    # Afficher la taille totale du dossier
+    total_size = sum(os.path.getsize(os.path.join(dirpath,filename)) 
+                    for dirpath, dirnames, filenames in os.walk(output_dir) 
+                    for filename in filenames) / (1024 * 1024)  # Convert to MB
     
     logger.info(f"""
 ✨ Model successfully exported to {output_dir}!
+📦 Total export size: {total_size:.2f} MB
 
 To use this model locally:
 1. Copy the following files to your local machine:
-   - {output_dir}/model/       (entire directory)
-   - {output_dir}/Modelfile
-   - {output_dir}/README.md    (contains installation instructions)
+   - {os.path.join(output_dir, "model")}       (entire directory)
+   - {os.path.join(output_dir, "Modelfile")}
+   - {os.path.join(output_dir, "README.md")}    (contains installation instructions)
 2. Follow the instructions in README.md to install and run the model
 """)
     
