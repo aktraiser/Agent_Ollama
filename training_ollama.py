@@ -138,7 +138,7 @@ def train_model(model, tokenizer, dataset, max_seq_length):
     
     return trainer.train()
 
-def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", quantization_method="q4_k_m"):
+def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export"):
     """Export le modèle pour Ollama au format GGUF"""
     logger.info("Exporting model for Ollama...")
     
@@ -153,37 +153,14 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", quanti
     logger.info(f"Saving model and tokenizer to: {model_dir}")
     
     try:
-        # Sauvegarder en format HF d'abord
-        logger.info("Saving model in HF format...")
-        model.save_pretrained(
+        # Sauvegarder directement en GGUF avec Unsloth
+        logger.info("Converting to GGUF format...")
+        model.save_pretrained_gguf(
             model_dir,
-            safe_serialization=True
+            tokenizer,
+            quantization_method="q4_k_m"
         )
-        tokenizer.save_pretrained(model_dir)
-        
-        # Conversion en GGUF en utilisant llama.cpp
-        logger.info(f"Converting to GGUF format with {quantization_method}...")
-        
-        # Utiliser subprocess pour une meilleure gestion des erreurs
-        convert_cmd = [
-            "python", "-m", "llama_cpp.convert",
-            "--outfile", os.path.join(model_dir, "ggml-model-q4_k_m.gguf"),
-            "--model", model_dir,
-            "--type", "q4_k_m"
-        ]
-        
-        process = subprocess.run(
-            convert_cmd,
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        
-        if process.returncode != 0:
-            raise RuntimeError(f"Conversion failed: {process.stderr}")
             
-        logger.info("GGUF conversion completed successfully")
-        
         # Liste les fichiers sauvegardés
         files = os.listdir(model_dir)
         logger.info(f"Saved files in {model_dir}:")
@@ -197,7 +174,7 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", quanti
         raise
     
     # Création du Modelfile avec le chemin relatif
-    modelfile_content = '''FROM ./model/ggml-model-q4_k_m.gguf
+    modelfile_content = '''FROM ./model
 
 TEMPLATE """{{ .Prompt }}"""
 SYSTEM """Tu es un expert comptable français spécialisé dans le conseil aux entreprises. Réponds de manière précise et professionnelle."""
@@ -285,7 +262,7 @@ if __name__ == "__main__":
         output_dir = save_model_for_ollama(
             model, 
             tokenizer,
-            quantization_method="q4_k_m"  # Bon compromis taille/qualité
+            output_dir="./ollama_export"
         )
         
         logger.info(f"Model successfully exported to: {output_dir}")
