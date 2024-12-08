@@ -153,21 +153,36 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", quanti
     logger.info(f"Saving model and tokenizer to: {model_dir}")
     
     try:
-        # Sauvegarder en format HF d'abord (nécessaire pour certaines conversions)
-        logger.info("Saving model in HF format first...")
+        # Sauvegarder en format HF d'abord
+        logger.info("Saving model in HF format...")
         model.save_pretrained(
-            f"{model_dir}/hf_model",
+            model_dir,
             safe_serialization=True
         )
-        tokenizer.save_pretrained(f"{model_dir}/hf_model")
+        tokenizer.save_pretrained(model_dir)
         
-        # Sauvegarder en GGUF
+        # Conversion en GGUF en utilisant llama.cpp
         logger.info(f"Converting to GGUF format with {quantization_method}...")
-        model.save_pretrained_gguf(
-            model_dir,
-            tokenizer,
-            quantization_method=quantization_method
+        
+        # Utiliser subprocess pour une meilleure gestion des erreurs
+        convert_cmd = [
+            "python", "-m", "llama_cpp.convert",
+            "--outfile", os.path.join(model_dir, "ggml-model-q4_k_m.gguf"),
+            "--model", model_dir,
+            "--type", "q4_k_m"
+        ]
+        
+        process = subprocess.run(
+            convert_cmd,
+            check=True,
+            capture_output=True,
+            text=True
         )
+        
+        if process.returncode != 0:
+            raise RuntimeError(f"Conversion failed: {process.stderr}")
+            
+        logger.info("GGUF conversion completed successfully")
         
         # Liste les fichiers sauvegardés
         files = os.listdir(model_dir)
@@ -182,7 +197,7 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", quanti
         raise
     
     # Création du Modelfile avec le chemin relatif
-    modelfile_content = '''FROM ./model
+    modelfile_content = '''FROM ./model/ggml-model-q4_k_m.gguf
 
 TEMPLATE """{{ .Prompt }}"""
 SYSTEM """Tu es un expert comptable français spécialisé dans le conseil aux entreprises. Réponds de manière précise et professionnelle."""
