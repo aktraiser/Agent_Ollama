@@ -142,31 +142,16 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", push_t
     """Export le modèle pour Ollama selon la documentation"""
     logger.info("Exporting model for Ollama...")
     
-    # Sauvegarder d'abord le modèle LoRA
-    logger.info("Saving LoRA adapter...")
-    model.save_pretrained("lora_weights")
-    tokenizer.save_pretrained("lora_weights")
-    
-    # Export en format standard (pas de GGUF pour le moment)
-    logger.info("Saving model in standard format...")
+    # Créer le dossier d'export
     os.makedirs(output_dir, exist_ok=True)
     
-    try:
-        if push_to_hub and repo_id:
-            logger.info(f"Pushing model to Hugging Face Hub: {repo_id}")
-            model.push_to_hub(repo_id)
-            tokenizer.push_to_hub(repo_id)
-        else:
-            logger.info("Saving model locally")
-            model.save_pretrained(output_dir)
-            tokenizer.save_pretrained(output_dir)
-            
-    except Exception as e:
-        logger.error(f"Error during model export: {str(e)}")
-        logger.info("Continuing with local model only")
+    # Sauvegarder le modèle et le tokenizer
+    logger.info("Saving model and tokenizer...")
+    model.save_pretrained(os.path.join(output_dir, "model"))
+    tokenizer.save_pretrained(os.path.join(output_dir, "model"))
     
-    # Création du Modelfile
-    modelfile_content = f'''FROM {os.path.join(output_dir, "model.safetensors")}
+    # Création du Modelfile avec le chemin relatif
+    modelfile_content = '''FROM ./model
 PARAMETER stop "Human:"
 PARAMETER stop "Assistant:"
 PARAMETER temperature 0.7
@@ -175,8 +160,42 @@ PARAMETER top_p 0.5
 PARAMETER repeat_penalty 1.1
 PARAMETER num_ctx 2048'''
     
-    with open(os.path.join(output_dir, "Modelfile"), "w") as f:
+    modelfile_path = os.path.join(output_dir, "Modelfile")
+    with open(modelfile_path, "w") as f:
         f.write(modelfile_content)
+    
+    # Créer un README avec les instructions
+    readme_content = """# Modèle Comptable Expert
+
+Ce modèle a été entraîné pour répondre à des questions comptables.
+
+## Installation locale
+
+1. Copiez le dossier 'model' et le fichier 'Modelfile' sur votre machine locale
+2. Ouvrez un terminal et naviguez vers le dossier contenant ces fichiers
+3. Créez le modèle dans Ollama :
+   ```bash
+   ollama create comptable-expert -f Modelfile
+   ```
+4. Testez le modèle :
+   ```bash
+   ollama run comptable-expert "Quelle est la différence entre un bilan et un compte de résultat?"
+   ```
+"""
+    
+    with open(os.path.join(output_dir, "README.md"), "w") as f:
+        f.write(readme_content)
+    
+    logger.info(f"""
+✨ Model successfully exported to {output_dir}!
+
+To use this model locally:
+1. Copy the following files to your local machine:
+   - {output_dir}/model/       (entire directory)
+   - {output_dir}/Modelfile
+   - {output_dir}/README.md    (contains installation instructions)
+2. Follow the instructions in README.md to install and run the model
+""")
     
     return output_dir
 
@@ -234,10 +253,22 @@ if __name__ == "__main__":
         
         if setup_ollama():
             logger.info("Creating Ollama model...")
-            subprocess.run(['ollama', 'create', 'comptable-expert', '-f', 
-                          os.path.join(ollama_dir, "Modelfile")])
-            
-            logger.info("""
+            try:
+                modelfile_path = os.path.join(ollama_dir, "Modelfile")
+                # Ensure the Modelfile exists and is readable
+                if not os.path.exists(modelfile_path):
+                    raise FileNotFoundError(f"Modelfile not found at {modelfile_path}")
+                
+                # Create the model with explicit path
+                result = subprocess.run(
+                    ['ollama', 'create', 'comptable-expert', '-f', modelfile_path],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode == 0:
+                    logger.info("""
 ✨ Model successfully exported and configured!
 
 To use your model:
@@ -246,6 +277,12 @@ To use your model:
 For testing:
 ollama run comptable-expert "Quelle est la différence entre un bilan et un compte de résultat?"
 """)
+                else:
+                    logger.error(f"Failed to create model. Output: {result.stderr}")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to create Ollama model: {e.stderr}")
+            except Exception as e:
+                logger.error(f"An error occurred while creating the model: {str(e)}")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         raise
