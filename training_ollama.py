@@ -145,36 +145,28 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", push_t
     # Sauvegarder d'abord le modèle LoRA
     logger.info("Saving LoRA adapter...")
     model.save_pretrained("lora_weights")
+    tokenizer.save_pretrained("lora_weights")
     
-    # Export en GGUF
-    logger.info("Converting to GGUF format...")
+    # Export en format standard (pas de GGUF pour le moment)
+    logger.info("Saving model in standard format...")
     os.makedirs(output_dir, exist_ok=True)
     
     try:
         if push_to_hub and repo_id:
             logger.info(f"Pushing model to Hugging Face Hub: {repo_id}")
-            # Use FastLanguageModel's GGUF conversion for Hub
-            FastLanguageModel.push_to_hub_gguf(
-                model=model,
-                repo_id=repo_id,
-                tokenizer=tokenizer,
-                quantization="q4_k_m"
-            )
+            model.push_to_hub(repo_id)
+            tokenizer.push_to_hub(repo_id)
         else:
             logger.info("Saving model locally")
-            # Use FastLanguageModel's GGUF conversion for local save
-            output_path = os.path.join(output_dir, "unsloth.Q4_K_M.gguf")
-            FastLanguageModel.save_pretrained_gguf(
-                model=model,
-                save_directory=output_dir,
-                quantization="q4_k_m"
-            )
+            model.save_pretrained(output_dir)
+            tokenizer.save_pretrained(output_dir)
+            
     except Exception as e:
         logger.error(f"Error during model export: {str(e)}")
         logger.info("Continuing with local model only")
     
     # Création du Modelfile
-    modelfile_content = f'''FROM {os.path.join(output_dir, "unsloth.Q4_K_M.gguf")}
+    modelfile_content = f'''FROM {os.path.join(output_dir, "model.safetensors")}
 PARAMETER stop "Human:"
 PARAMETER stop "Assistant:"
 PARAMETER temperature 0.7
