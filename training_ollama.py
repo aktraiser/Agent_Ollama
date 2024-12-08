@@ -138,8 +138,8 @@ def train_model(model, tokenizer, dataset, max_seq_length):
     
     return trainer.train()
 
-def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", push_to_hub=False, repo_id=None):
-    """Export le modèle pour Ollama selon la documentation"""
+def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", quantization_method="q4_k_m"):
+    """Export le modèle pour Ollama au format GGUF"""
     logger.info("Exporting model for Ollama...")
     
     # Créer le dossier d'export avec chemin absolu
@@ -153,40 +153,37 @@ def save_model_for_ollama(model, tokenizer, output_dir="./ollama_export", push_t
     logger.info(f"Saving model and tokenizer to: {model_dir}")
     
     try:
-        # Sauvegarder d'abord en format HF
-        logger.info("Saving model in HF format...")
-        model.save_pretrained(model_dir, safe_serialization=False)  # Désactiver safe_serialization pour éviter safetensors
-        tokenizer.save_pretrained(model_dir)
+        # Sauvegarder en format HF d'abord (nécessaire pour certaines conversions)
+        logger.info("Saving model in HF format first...")
+        model.save_pretrained(
+            f"{model_dir}/hf_model",
+            safe_serialization=True
+        )
+        tokenizer.save_pretrained(f"{model_dir}/hf_model")
         
-        # Convertir en GGUF avec llama.cpp
-        logger.info("Converting to GGUF format...")
-        gguf_path = os.path.join(model_dir, "ggml-model-f16.gguf")
+        # Sauvegarder en GGUF
+        logger.info(f"Converting to GGUF format with {quantization_method}...")
+        model.save_pretrained_gguf(
+            model_dir,
+            tokenizer,
+            quantization_method=quantization_method
+        )
         
-        # Utiliser convert.py de llama.cpp
-        convert_cmd = [
-            "python3",
-            "-m", "llama_cpp.convert",
-            "--outfile", gguf_path,
-            "--outtype", "f16",
-            model_dir
-        ]
-        
-        subprocess.run(convert_cmd, check=True)
-        logger.info(f"Model converted to GGUF: {gguf_path}")
-        
-        # Nettoyer les fichiers HF temporaires
-        for f in os.listdir(model_dir):
-            if f != "ggml-model-f16.gguf":
-                os.remove(os.path.join(model_dir, f))
-        
-        logger.info("Cleaned up temporary files")
-        
+        # Liste les fichiers sauvegardés
+        files = os.listdir(model_dir)
+        logger.info(f"Saved files in {model_dir}:")
+        for f in files:
+            file_path = os.path.join(model_dir, f)
+            size = os.path.getsize(file_path) / (1024 * 1024)  # Taille en MB
+            logger.info(f"  - {f}: {size:.2f} MB")
+            
     except Exception as e:
         logger.error(f"Error saving model: {str(e)}")
         raise
     
     # Création du Modelfile avec le chemin relatif
-    modelfile_content = '''FROM ./model/ggml-model-f16.gguf
+    modelfile_content = '''FROM ./model
+
 TEMPLATE """{{ .Prompt }}"""
 SYSTEM """Tu es un expert comptable français spécialisé dans le conseil aux entreprises. Réponds de manière précise et professionnelle."""
 PARAMETER temperature 0.7
@@ -216,30 +213,12 @@ Ce modèle a été entraîné pour répondre à des questions comptables.
 4. Testez le modèle :
    ```bash
    ollama run comptable-expert "Quelle est la différence entre un bilan et un compte de résultat?"
-   ```
-"""
+   ```"""
     
     readme_path = os.path.join(output_dir, "README.md")
     with open(readme_path, "w") as f:
         f.write(readme_content)
     logger.info(f"Created README at: {readme_path}")
-    
-    # Afficher la taille totale du dossier
-    total_size = sum(os.path.getsize(os.path.join(dirpath,filename)) 
-                    for dirpath, dirnames, filenames in os.walk(output_dir) 
-                    for filename in filenames) / (1024 * 1024)  # Convert to MB
-    
-    logger.info(f"""
-✨ Model successfully exported to {output_dir}!
-📦 Total export size: {total_size:.2f} MB
-
-To use this model locally:
-1. Copy the following files to your local machine:
-   - {os.path.join(output_dir, "model")}       (entire directory)
-   - {os.path.join(output_dir, "Modelfile")}
-   - {os.path.join(output_dir, "README.md")}    (contains installation instructions)
-2. Follow the instructions in README.md to install and run the model
-""")
     
     return output_dir
 
@@ -287,18 +266,19 @@ if __name__ == "__main__":
         logger.info("Preparing model for inference...")
         model = FastLanguageModel.for_inference(model)
         
-        # Export pour Ollama (local only by default)
-        ollama_dir = save_model_for_ollama(
+        # Export pour Ollama avec quantization Q4_K_M
+        output_dir = save_model_for_ollama(
             model, 
             tokenizer,
-            output_dir="./ollama_export",
-            push_to_hub=False  # Set to True and provide repo_id to upload to HF Hub
+            quantization_method="q4_k_m"  # Bon compromis taille/qualité
         )
+        
+        logger.info(f"Model successfully exported to: {output_dir}")
         
         if setup_ollama():
             logger.info("Creating Ollama model...")
             try:
-                modelfile_path = os.path.join(ollama_dir, "Modelfile")
+                modelfile_path = os.path.join(output_dir, "Modelfile")
                 # Ensure the Modelfile exists and is readable
                 if not os.path.exists(modelfile_path):
                     raise FileNotFoundError(f"Modelfile not found at {modelfile_path}")
